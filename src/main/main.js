@@ -18,6 +18,47 @@ const config = require('./config');
 const { Scanner } = require('./scanner');
 const ipc = require('./ipc');
 
+/**
+ * 兼容模式（受限环境专用）
+ * ------------------------------------------------------------------
+ * 适用范围：容器 / 沙箱 / 远程桌面（RDP）/ 老旧或异常的显卡驱动 / 某些杀软环境。
+ * 症状：正常启动时报
+ *   GPU process exited unexpectedly: exit_code=-1073741819
+ *   FATAL: GPU process isn't usable. Goodbye.
+ * 然后进程直接退出，窗口根本不出现。
+ *
+ * 打开方式（任选其一）：
+ *   npm start -- --safe-mode
+ *   npm start -- --disable-gpu
+ *   DV_SAFE_MODE=1 npm start
+ * 打包后的 exe 同理：DiskVision.exe --safe-mode
+ *
+ * 关掉硬件加速对本程序几乎没有影响 —— UI 只用到 2D canvas（ECharts），
+ * 树图渲染走软件光栅一样流畅，还能顺便省掉 GPU 进程的内存占用。
+ */
+const SAFE_MODE = process.argv.includes('--safe-mode')
+  || process.argv.includes('--disable-gpu')
+  || process.env.DV_SAFE_MODE === '1';
+
+// 兜底提示：如果环境里设了 ELECTRON_RUN_AS_NODE=1，electron 会以纯 Node 模式加载本文件，
+// require('electron') 返回的只是 exe 路径字符串（不是 API 对象），后面全都会 undefined。
+// 这种时候给一句人话，比抛 "Cannot read properties of undefined" 好排查得多。
+if (!app || typeof app.disableHardwareAcceleration !== 'function') {
+  console.error('[DiskVision] 启动失败：当前处于 Node 模式，而不是 Electron 运行时。');
+  console.error('  原因：环境变量 ELECTRON_RUN_AS_NODE 被设置了（有些终端 / CI / 沙箱会带）。');
+  console.error('  解决：PowerShell 执行  $env:ELECTRON_RUN_AS_NODE=""   后重新 npm start');
+  console.error('        cmd 执行         set ELECTRON_RUN_AS_NODE=      后重新 npm start');
+  process.exit(1);
+}
+
+if (SAFE_MODE) {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('in-process-gpu');
+}
+
 let win = null;
 const scanner = new Scanner();
 
@@ -68,6 +109,8 @@ function createWindow() {
 app.whenReady().then(() => {
   config.init(app.getPath('userData'));
   getConfig();
+
+  if (SAFE_MODE) console.log('[DiskVision] 兼容模式已启用（软件渲染 / 无 GPU 进程）');
 
   ipc.register({
     get win() { return win; },   // 用 getter，保证 IPC 层永远拿到当前窗口

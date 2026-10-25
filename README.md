@@ -101,6 +101,36 @@ npm install
 
 `package.json` 里已配置 `electronDownload.mirror`，若仍慢，显式设置环境变量最稳。
 
+### 2.1 完全离线安装（已有官方 zip / 已解压目录时）
+
+electron 的 npm 包只有 ~100KB，真正 100MB+ 的运行时是 postinstall 阶段下载的。
+如果你手上已有官方运行时，可以跳过下载，用脚本装进去：
+
+```bash
+# ① 只装 JS 依赖，不下载运行时
+ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install
+#   Windows cmd：set ELECTRON_SKIP_BINARY_DOWNLOAD=1 && npm install
+#   PowerShell：  $env:ELECTRON_SKIP_BINARY_DOWNLOAD=1; npm install
+
+# ② 先校验（只读、不安装），确认包是完整的
+node scripts/install-electron-offline.js --check D:\dl\electron-v45.0.0-win32-x64
+
+# ③ 确认无误后安装（zip 或已解压目录都支持，会自动搜索常见位置）
+node scripts/install-electron-offline.js
+```
+
+脚本会跑四道校验，任何一道不过就拒绝安装：
+① ZIP 结构完整（能识别下载中断的半截包）→ ② 目录完整（`electron.exe`/`icudtl.dat`/`default_app.asar`/Chromium dll）→ ③ 有效 PE 头 → ④ 执行 `electron.exe --version` 真的输出版本号。
+
+> **别下错文件**：`electron-v*-win32-x64.zip` 约 **100MB**，里面是 `electron.exe`；
+> `chromedriver-v*-win32-x64.zip` 只有 **32MB**，里面是 `chromedriver.exe`，装了也跑不起来。
+>
+> **两个坑**：
+> - `%TEMP%\electron-download-*` 里可能残留上次中断的半截 zip，脚本会识别并跳过。
+> - 如果你的终端里设了 `ELECTRON_RUN_AS_NODE=1`，`electron .` 会以 Node 模式启动而看不到窗口，
+>   且 `electron --version` 会打印内置 Node 版本（如 `v24.22.0`）而非 Electron 版本。
+>   跑之前 `unset ELECTRON_RUN_AS_NODE` 即可（脚本内部已自动清理该变量）。
+
 ### 3. 启动
 
 ```bash
@@ -108,6 +138,23 @@ npm start
 ```
 
 首次启动会看到：左侧导航、中间「尚未扫描」提示、右侧空面板。选择盘符 → 点**开始扫描** → 树图出现。
+
+**如果窗口根本不出现**，日志里刷
+`GPU process exited unexpectedly` / `FATAL: GPU process isn't usable. Goodbye.`，
+说明当前环境（容器 / 沙箱 / 远程桌面 / 显卡驱动异常）拿不到 GPU，用兼容模式启动：
+
+```bash
+npm start -- --safe-mode          # 或 npm start -- --disable-gpu
+DV_SAFE_MODE=1 npm start          # PowerShell: $env:DV_SAFE_MODE=1; npm start
+```
+
+兼容模式会关掉硬件加速、不启用 Chromium 沙箱与独立 GPU 进程。本程序的 UI 只用 2D canvas
+（ECharts），软件渲染一样流畅，还能省下 GPU 进程那几十 MB 内存。打包后的 exe 同样支持
+`DiskVision.exe --safe-mode`。
+
+**如果报 `Cannot read properties of undefined (reading 'disableHardwareAcceleration')`
+或 `require('electron')` 返回的是一串路径**，说明终端里设了 `ELECTRON_RUN_AS_NODE=1`，
+electron 被当成普通 Node 在跑。清掉该变量即可（程序里已加了友好提示）。
 
 ### 4. 自测（不需要 Electron）
 
