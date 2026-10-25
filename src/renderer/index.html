@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+  <title>DiskVision · 磁盘可视化清理</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- ============================ 顶栏 ============================ -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo"></span>
+        <span class="brand-text">Disk<b>Vision</b></span>
+        <span class="brand-sub">磁盘可视化分析 · 智能安全清理</span>
+      </div>
+
+      <div class="drive-box">
+        <span class="lbl">扫描目标</span>
+        <div class="drives" id="driveList"><span class="muted">加载中…</span></div>
+      </div>
+
+      <div class="top-actions">
+        <button class="btn primary" id="btnScan"><i class="ic-scan"></i>开始扫描</button>
+        <button class="btn ghost" id="btnStop" disabled><i class="ic-stop"></i>停止</button>
+      </div>
+    </header>
+
+    <!-- ============================ 主体 ============================ -->
+    <div class="body">
+
+      <!-- ---------- 左侧导航 ---------- -->
+      <nav class="sidebar" id="nav">
+        <div class="nav-item active" data-view="treemap">
+          <i class="ni ni-tree"></i><span>全盘可视化</span>
+        </div>
+        <div class="nav-item" data-view="clean">
+          <i class="ni ni-broom"></i><span>一键智能清理</span>
+        </div>
+        <div class="nav-item" data-view="big">
+          <i class="ni ni-file"></i><span>大文件专项</span>
+        </div>
+        <div class="nav-item" data-view="dup">
+          <i class="ni ni-copy"></i><span>重复文件</span>
+        </div>
+        <div class="nav-item" data-view="dash">
+          <i class="ni ni-gauge"></i><span>磁盘仪表盘</span>
+        </div>
+        <div class="nav-item" data-view="ignore">
+          <i class="ni ni-set"></i><span>忽略列表设置</span>
+        </div>
+
+        <div class="nav-foot">
+          <div class="tip-title">安全提示</div>
+          <div class="tip">红色项目为系统关键文件，已永久锁定，任何删除请求都会被拒绝。</div>
+        </div>
+      </nav>
+
+      <!-- ---------- 中间舞台 ---------- -->
+      <section class="stage">
+
+        <!-- ===== 视图：全盘可视化 ===== -->
+        <div class="view active" id="view-treemap">
+          <div class="card fill">
+            <div class="card-head">
+              <div class="crumb" id="crumb"></div>
+              <div class="head-right">
+                <div class="legend" id="legend"></div>
+                <button class="btn tiny ghost" id="btnUp">返回上级</button>
+              </div>
+            </div>
+            <div class="chart-wrap" id="treemap"></div>
+            <div class="empty" id="tmEmpty">
+              <div class="empty-title">尚未扫描</div>
+              <div class="empty-sub">选择盘符后点击「开始扫描」，这里会生成矩形树图</div>
+            </div>
+          </div>
+          <div class="row2">
+            <div class="card">
+              <div class="card-title">文件类型占比</div>
+              <div class="chart-wrap small" id="pieType"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">大文件夹容量占比</div>
+              <div class="chart-wrap small" id="pieDir"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 视图：一键智能清理 ===== -->
+        <div class="view" id="view-clean">
+          <div class="card fill">
+            <div class="card-head">
+              <div class="crumb-static">智能垃圾清理 · 安全分级</div>
+              <div class="head-right">
+                <label class="mini">闲置天数
+                  <input type="number" id="clIdle" class="inp mini-inp" min="1" max="3650" />
+                </label>
+                <label class="mini">大文件阈值(MB)
+                  <input type="number" id="clBig" class="inp mini-inp" min="1" max="102400" />
+                </label>
+                <label class="mini chk"><input type="checkbox" id="clPersonal" />含个人目录</label>
+                <button class="btn tiny primary" id="btnJunkScan">扫描垃圾</button>
+              </div>
+            </div>
+            <div class="clean-sum" id="cleanSum"></div>
+            <div class="list scroll" id="junkList">
+              <div class="empty">
+                <div class="empty-title">尚未扫描垃圾</div>
+                <div class="empty-sub">点击右上角「扫描垃圾」，系统会自动识别并按安全等级分类</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="foot-left" id="junkSel">已选 0 项 · 0 B</div>
+              <div class="foot-right">
+                <button class="btn tiny ghost" id="btnRecycle">打开回收站</button>
+                <button class="btn tiny warn" id="btnCleanSafe">一键清理安全项</button>
+                <button class="btn tiny danger" id="btnCleanSel">清理选中项</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 视图：大文件专项 ===== -->
+        <div class="view" id="view-big">
+          <div class="card fill">
+            <div class="card-head">
+              <div class="tabs" id="bigTabs">
+                <span class="tab active" data-tab="file">TOP30 最大文件</span>
+                <span class="tab" data-tab="dir">TOP30 最大文件夹</span>
+              </div>
+              <div class="head-right">
+                <select class="inp" id="bigSort">
+                  <option value="size">按体积</option>
+                  <option value="mtime">按时间（最久）</option>
+                  <option value="mtime-desc">按时间（最新）</option>
+                </select>
+                <select class="inp" id="bigExt"><option value="all">全部类型</option></select>
+                <input class="inp" id="bigMin" type="number" placeholder="最小 MB" style="width:96px" />
+                <button class="btn tiny primary" id="btnBigRefresh">刷新</button>
+              </div>
+            </div>
+            <div class="table-wrap scroll">
+              <table class="tbl" id="bigTable">
+                <thead>
+                  <tr>
+                    <th style="width:34px"><input type="checkbox" id="bigAll" /></th>
+                    <th>名称</th>
+                    <th style="width:96px">大小</th>
+                    <th style="width:150px">修改时间</th>
+                    <th style="width:340px">路径</th>
+                    <th style="width:150px">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="bigBody"></tbody>
+              </table>
+            </div>
+            <div class="card-foot">
+              <div class="foot-left" id="bigSel">已选 0 项 · 0 B</div>
+              <div class="foot-right">
+                <button class="btn tiny danger" id="btnBigDel">删除选中（移入回收站）</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 视图：重复文件 ===== -->
+        <div class="view" id="view-dup">
+          <div class="card fill">
+            <div class="card-head">
+              <div class="crumb-static">重复文件扫描 · 体积 + MD5 双重校验</div>
+              <div class="head-right">
+                <label class="mini">最小体积(MB)
+                  <input type="number" id="dupMin" class="inp mini-inp" min="1" max="10240" />
+                </label>
+                <button class="btn tiny primary" id="btnDupScan">开始扫描</button>
+              </div>
+            </div>
+            <div class="clean-sum" id="dupSum"></div>
+            <div class="list scroll" id="dupList">
+              <div class="empty">
+                <div class="empty-title">尚未扫描重复文件</div>
+                <div class="empty-sub">扫描会先按体积分桶，再对候选文件做 MD5 精确比对</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="foot-left" id="dupSel">将删除 0 个冗余副本 · 0 B</div>
+              <div class="foot-right">
+                <button class="btn tiny ghost" id="btnRecycle2">打开回收站</button>
+                <button class="btn tiny danger" id="btnDupDel">删除冗余副本</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 视图：磁盘仪表盘 ===== -->
+        <div class="view" id="view-dash">
+          <div class="card">
+            <div class="card-title">磁盘使用率</div>
+            <div class="chart-wrap mid" id="gauge"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">扫描概况</div>
+            <div class="stats" id="statCards"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">八大类空间占用</div>
+            <div class="chart-wrap mid" id="barCat"></div>
+          </div>
+        </div>
+
+        <!-- ===== 视图：忽略列表 ===== -->
+        <div class="view" id="view-ignore">
+          <div class="card">
+            <div class="card-title">永不扫描的文件夹（每行一个）</div>
+            <textarea class="inp area" id="igDirs" spellcheck="false"></textarea>
+            <div class="hint">支持任意绝对路径，例如 <code>D:\Games</code>。命中目录及其子目录都会被跳过。</div>
+          </div>
+          <div class="card">
+            <div class="card-title">永不清理的文件类型（后缀，逗号或换行分隔）</div>
+            <textarea class="inp area short" id="igExts" spellcheck="false"></textarea>
+            <div class="hint">例如 <code>iso, psd, prproj</code>，填写后这些后缀不会出现在分类统计与清理建议中。</div>
+          </div>
+          <div class="card">
+            <div class="card-title">扫描参数</div>
+            <div class="form-grid" id="igForm">
+              <label>索引保留阈值(MB)
+                <input type="number" id="igKeep" class="inp" min="0" max="1024" />
+                <span class="hint inline">小于该体积的文件只计入统计，不进入列表与树图</span>
+              </label>
+              <label>闲置大文件判定(天)
+                <input type="number" id="igIdle" class="inp" min="1" max="3650" />
+              </label>
+              <label>闲置大文件阈值(MB)
+                <input type="number" id="igBig" class="inp" min="1" max="102400" />
+              </label>
+              <label>重复文件最小体积(MB)
+                <input type="number" id="igDup" class="inp" min="1" max="10240" />
+              </label>
+              <label class="chk2"><input type="checkbox" id="igHeavy" />跳过 WinSxS / DriverStore 等超重系统目录</label>
+              <label class="chk2"><input type="checkbox" id="igPersonal" />垃圾扫描包含个人目录（下载/桌面/文档）</label>
+            </div>
+          </div>
+          <div class="card-foot standalone">
+            <div class="foot-left muted" id="igMsg"></div>
+            <div class="foot-right">
+              <button class="btn tiny ghost" id="btnIgReset">恢复默认</button>
+              <button class="btn tiny primary" id="btnIgSave">保存设置</button>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ---------- 右侧面板 ---------- -->
+      <aside class="sidepanel">
+        <div class="card">
+          <div class="card-title">TOP 大文件</div>
+          <div class="rank" id="rankFiles"><div class="muted small">扫描后显示</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">可清理空间</div>
+          <div class="clean-bars" id="cleanBars">
+            <div class="muted small">扫描垃圾后显示</div>
+          </div>
+        </div>
+        <div class="card grow">
+          <div class="card-title">文件详情</div>
+          <div class="detail" id="detail"><div class="muted small">点击任意色块或列表项查看</div></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ============================ 底部状态栏 ============================ -->
+    <footer class="statusbar">
+      <div class="sb-left">
+        <span class="dot" id="sbDot"></span>
+        <span id="sbState">就绪</span>
+      </div>
+      <div class="sb-mid">
+        <div class="prog"><div class="prog-bar" id="sbBar"></div></div>
+      </div>
+      <div class="sb-right" id="sbInfo">未扫描</div>
+    </footer>
+  </div>
+
+  <!-- 右键菜单 / 弹窗 / 提示 -->
+  <div class="ctx-menu" id="ctxMenu"></div>
+  <div class="mask" id="mask">
+    <div class="dialog" id="dialog">
+      <div class="dlg-title" id="dlgTitle"></div>
+      <div class="dlg-body" id="dlgBody"></div>
+      <div class="dlg-foot">
+        <button class="btn tiny ghost" id="dlgNo">取消</button>
+        <button class="btn tiny danger" id="dlgYes">确定</button>
+      </div>
+    </div>
+  </div>
+  <div class="toasts" id="toasts"></div>
+
+  <!-- 依赖与脚本 -->
+  <script src="../shared/categories.js"></script>
+  <script src="../shared/safety.js"></script>
+  <script src="../shared/rules.js"></script>
+  <script src="vendor/echarts.min.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/menu.js"></script>
+  <script src="js/view-treemap.js"></script>
+  <script src="js/view-clean.js"></script>
+  <script src="js/view-big.js"></script>
+  <script src="js/view-dup.js"></script>
+  <script src="js/view-dash.js"></script>
+  <script src="js/view-ignore.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>

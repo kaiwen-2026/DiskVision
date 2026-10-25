@@ -1,0 +1,68 @@
+{
+  "name": "disk-vision",
+  "version": "1.0.0",
+  "description": "DiskVision - 极速磁盘空间可视化分析 + 智能安全清理工具（Electron + ECharts）",
+  "main": "src/main/main.js",
+  "author": "kaiwen-2026",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:portable": "electron-builder --win portable",
+    "dist:installer": "electron-builder --win nsis",
+    "icon": "node scripts/make-icon.js",
+    "test": "node tests/selftest.js",
+    "postinstall": "node scripts/vendor-echarts.js"
+  },
+  "devDependencies": {
+    "echarts": "^5.5.1",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.diskvision.app",
+    "productName": "DiskVision",
+    "copyright": "Copyright © 2026 DiskVision",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!src/**/*.map"
+    ],
+    "asar": false,
+    "compression": "maximum",
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "requestedExecutionLevel": "highest"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DiskVision",
+      "language": "2052",
+      "installerLanguages": ["zh_CN"],
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-便携版.${ext}"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "npmRebuild": false
+  }
+}
