@@ -196,18 +196,51 @@ npm run pack              # 输出到 dist/win-unpacked，可直接运行里面�
 
 ### 2. 换图标
 
-把你的 `icon.ico`（建议 256×256）覆盖 `build/icon.ico` 即可。  
-当前图标由 `node scripts/make-icon.js` 生成（品牌渐变 + 圆环），随时可重新生成。
+把你的 `icon.ico` 覆盖 `build/icon.ico` 即可。**注意必须包含 256×256**，否则 electron-builder 直接报
+`image build\icon.ico must be at least 256x256`。
 
-### 3. 打包常见问题
+当前图标由 `node scripts/make-icon.js` 生成（纯 Node 画像素，无第三方依赖），输出
+16/32/48/64/128/256 六种尺寸的 32 位色 ICO，并自带回读校验。
+
+### 3. 关于管理员权限（UAC）
+
+`package.json → build.win.requestedExecutionLevel` 当前是 **`highestAvailable`**：
+
+- 管理员账号运行时，每次启动会弹一次 UAC，程序拿到完整权限，能扫描 `C:\Windows`、
+  `System Volume Information`、其他用户目录等受保护位置，树图总和与磁盘「已用」基本吻合；
+- 非管理员账号运行时，不弹 UAC，静默降级，被拒绝的目录会被跳过并在底部状态栏计数。
+
+不想要 UAC 提示，就把该值改成 `asInvoker`（代价：受保护目录扫不到，树图会少几 GB ~ 十几 GB）。
+三个合法取值只有 `asInvoker` / `highestAvailable` / `requireAdministrator`，
+写成 `highest` 之类的清单用语会直接报 `Invalid configuration object`。
+
+### 4. 打包常见问题
 
 | 现象 | 原因 / 解决 |
 |---|---|
-| 卡在下载 `electron-v28.x.x-win32-x64.zip` | 设置 `ELECTRON_MIRROR` 镜像（见上） |
+| `configuration.win.requestedExecutionLevel should be one of these` | 只能填 `asInvoker` / `highestAvailable` / `requireAdministrator` |
+| `image build\icon.ico must be at least 256x256` | 执行 `node scripts/make-icon.js` 重新生成（旧版脚本只出 64×64） |
+| `Cannot create symbolic link ... winCodeSign ... darwin\...dylib` | 普通用户没有创建符号链接的权限，而 `winCodeSign` 包里含 macOS 符号链接。**Windows 上根本用不到 darwin 部分**，手动解压即可（见下） |
+| NSIS 收尾报 `Can't open output file` | `dist/` 里有上次中断留下的半个 exe 占着文件名。`rm -rf dist` 后重跑 |
+| 卡在下载 `electron-v*-win32-x64.zip` | 设置 `ELECTRON_MIRROR` 镜像，或按第二章「完全离线安装」直接用本地包 |
 | 卡在下载 `winCodeSign` / `nsis` 资源 | 设置 `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/` |
-| 报 `icon.ico` 不存在 | 执行 `node scripts/make-icon.js` 重新生成 |
-| 安装包被杀软误报 | 无签名 exe 的通病；发布建议做代码签名，或在 README/下载页说明 |
-| 想减小体积 | `package.json → build.files` 已只打包 `src/**`；不要引入其它 npm 包 |
+| 安装包被杀软误报 | 无签名 exe 的通病；发布建议做代码签名，或在下载页说明 |
+| 想减小体积 | `build.files` 已只打包 `src/**`；不要引入其它 npm 包 |
+
+**winCodeSign 符号链接报错的手动修法**（已实测可用）：
+
+```bash
+# 1. 让 electron-builder 先尝试下载一次，拿到缓存里的 7z
+#    （失败也没关系，7z 已经落到 %LOCALAPPDATA%\electron-builder\Cache\winCodeSign\ 下）
+# 2. 排除 darwin 解压到它期望的目录名
+C="$LOCALAPPDATA/electron-builder/Cache/winCodeSign"
+Z=$(ls "$C"/*.7z | head -1)
+./node_modules/7zip-bin/win/x64/7za.exe x "$Z" -o"$C/winCodeSign-2.6.0" '-x!darwin' -y
+# 3. 重跑构建，它会发现目录已存在并跳过下载解压
+npm run dist
+```
+
+也可以直接以管理员身份运行一次构建，或打开 Windows「开发者模式」（授予当前用户创建符号链接的权限）。
 
 ---
 
